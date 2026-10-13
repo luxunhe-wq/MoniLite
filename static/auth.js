@@ -5,6 +5,8 @@ let managedUsers = [];
 let userSearch = '';
 
 async function apiRequest(path, {method='GET', body} = {}) {
+  const requestGeneration=state.authGeneration;
+  const requestUserId=state.user?.id;
   const controller = new AbortController();
   const timeout = setTimeout(()=>controller.abort(),12000);
   try {
@@ -16,8 +18,10 @@ async function apiRequest(path, {method='GET', body} = {}) {
     const response = await fetch(path,{method,headers,credentials:'same-origin',cache:'no-store',signal:controller.signal,body:method==='GET'?undefined:JSON.stringify(body||{})});
     const result = await response.json();
     if(!response.ok) {
-      if(response.status===401 && state.user) handleSessionExpired();
-      throw new Error(result.error || '请求失败，请稍后重试');
+      if(response.status===401 && state.user && state.authGeneration===requestGeneration && state.user.id===requestUserId) handleSessionExpired();
+      const error=new Error(result.error || '请求失败，请稍后重试');
+      error.status=response.status;
+      throw error;
     }
     return result;
   } catch(error) {
@@ -33,6 +37,8 @@ function clearSession() {
   state.user=null;state.csrf=null;state.data=null;state.fetching=false;state.failed=false;
   state.authBusy=false;
   resetStorageView();
+  resetAlertSettings();
+  $$('[data-admin-nav]').forEach(element=>element.hidden=true);
   state.dockerSearch='';state.portSearch='';state.portFilter='all';state.portScope='any';state.portDirection=1;state.settingsTab='preferences';
   managedUsers=[];userSearch='';
   document.body.classList.remove('authenticated');
@@ -51,6 +57,7 @@ function activateSession(result) {
   state.user=result.user;state.csrf=result.csrf_token;
   authStatus.initialized=true;
   document.body.classList.add('authenticated');
+  $$('[data-admin-nav]').forEach(element=>element.hidden=state.user.role!=='admin');
   $('#auth-panel').innerHTML='';
   $('#profile-username').textContent=state.user.username;
   $('#profile-role').textContent=state.user.role==='admin'?'Administrator':'Read-only member';
@@ -96,7 +103,7 @@ async function checkSession() {
 }
 
 function accountSettingsLayout(preferencesPanel) {
-  if(state.user.role!=='admin' && state.settingsTab==='users')state.settingsTab='preferences';
+  if(state.settingsTab==='alerts' || state.user.role!=='admin' && state.settingsTab==='users')state.settingsTab='preferences';
   const tabs=[['preferences','偏好设置'],['account','账户安全'],...(state.user.role==='admin'?[['users','用户管理']]:[])];
   const passwordForm=`<section class="panel settings-panel"><div class="settings-section"><h3>当前账户</h3><p>管理你的登录信息与账户密码。</p><div class="account-identity"><span class="avatar">${esc(state.user.username[0].toUpperCase())}</span><div><strong>${esc(state.user.username)}</strong><span>${state.user.role==='admin'?'管理员 · 可以管理用户与访问权限':'成员 · 只读查看服务器资源'}</span></div><button class="button" data-account-logout>退出登录</button></div></div><div class="settings-section"><h3>修改密码</h3><p>修改后其他设备的登录状态会失效，当前设备保持登录。</p><form id="password-change-form" class="account-form"><label class="form-label" for="current-password">当前密码</label><input class="form-input" id="current-password" type="password" autocomplete="current-password" required maxlength="128"><label class="form-label" for="new-password">新密码</label><input class="form-input" id="new-password" type="password" autocomplete="new-password" required minlength="10" maxlength="128" placeholder="至少 10 个字符"><label class="form-label" for="confirm-new-password">确认新密码</label><input class="form-input" id="confirm-new-password" type="password" autocomplete="new-password" required minlength="10" maxlength="128"><div class="form-message error" id="password-error" role="alert" hidden></div><button class="button button-primary" type="submit">保存新密码</button></form></div></section>`;
   const userManager=state.user.role==='admin'?`<section class="panel"><div class="panel-heading"><div class="panel-header-copy"><div class="panel-title"><h2>用户与访问权限</h2><span class="tag" id="users-count">—</span></div><p class="panel-subtitle">审核注册申请，管理谁可以访问这台服务器。</p></div><button class="button button-primary" data-user-create>创建用户 ${icon('arrow')}</button></div><div class="user-registration-row"><div class="setting-label"><strong>开放注册申请</strong><span>新用户提交申请后，仍需要管理员审核才能登录。</span></div><button class="toggle" id="registration-toggle" role="switch" aria-label="开放注册申请" aria-checked="false" disabled></button></div><div class="toolbar"><label class="filter-search">${icon('search')}<input id="user-search" placeholder="搜索账号或角色" aria-label="搜索用户" value="${esc(userSearch)}"></label><span class="toolbar-note" id="pending-users-count">加载用户中…</span></div><div class="form-message error user-manager-error" id="user-manager-error" role="alert" hidden></div><div class="table-scroll"><table class="user-table"><thead><tr><th>账号</th><th>权限</th><th>状态</th><th>创建时间</th><th>最近登录</th><th>操作</th></tr></thead><tbody id="user-table-body"><tr><td colspan="6"><div class="empty-state">正在读取用户…</div></td></tr></tbody></table></div><div class="table-footer"><span>管理员拥有用户管理权限，成员只读查看监控。</span><span>最多 500 个用户</span></div></section>`:'';

@@ -27,3 +27,20 @@ body.authenticated .auth-screen{display:none}
 .auth-story .brand{max-width:none;width:max-content;font-size:30px;letter-spacing:-1px}
 .auth-story .brand-mark{font-size:24px;line-height:35px}
 @media(max-width:700px){.auth-story .brand{font-size:26px}.auth-story .brand-mark{font-size:21px;line-height:29px}}
+
+.alert-settings fieldset{border:0;padding:0;margin:0;min-width:0}
+.alert-check{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text);line-height:1.6;cursor:pointer}
+.alert-check input{width:16px;height:16px;flex:0 0 auto;accent-color:var(--green)}
+.alert-check strong{font-weight:550}.alert-check small{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+.alert-master{margin:23px 0}.alert-section-title{font-size:13px;font-weight:550;margin:28px 0 8px}
+.alert-channel-grid,.alert-timing-grid{display:grid;grid-template-columns:1fr 1.5fr;gap:20px}
+.alert-timing-grid{grid-template-columns:1fr 1fr}.alert-channel-grid>div,.alert-timing-grid>div{min-width:0}
+.alert-help{display:block;font-size:11px;line-height:1.8;color:var(--muted);overflow-wrap:anywhere;margin:9px 0}
+.alert-rule-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:16px}
+.alert-rule{border:1px solid var(--border);border-radius:8px;padding:16px;background:var(--card)}
+.alert-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:24px}.alert-actions .alert-help{margin:0}
+.alert-settings #alert-feedback{margin-bottom:12px}.alert-settings #alert-retry{margin-bottom:10px}
+.alert-history-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}.alert-history-heading .button{flex-shrink:0}
+.alert-history-table{min-width:620px;width:100%}.alert-history-table td{vertical-align:top}.alert-history-table strong{font-size:12px;font-weight:550}
+.alert-record-detail{display:block;color:var(--muted);font-size:11px;line-height:1.8;margin-top:5px;max-width:340px;overflow-wrap:anywhere}
+@media(max-width:700px){.alert-channel-grid,.alert-timing-grid,.alert-rule-grid{grid-template-columns:minmax(0,1fr);gap:12px}.alert-rule{padding:14px}.alert-check{font-size:11px}.alert-check small,.alert-help{font-size:10px}.alert-settings .form-input{font-size:16px}.alert-history-heading{align-items:flex-start}.alert-history-heading .button{font-size:10px;padding:8px}.alert-actions .button{font-size:11px}}

@@ -10,7 +10,7 @@
 
 **为什么选择 MoniLite？** 如果你维护一台个人服务器或几台小型服务器，希望用手机随时查看系统和 Docker 的运行状态，MoniLite 提供一个安装简单、界面清晰、自带账户管理的本机监控面板。运行依赖只有 psutil，无需 Node.js、外部数据库或单独部署指标服务。
 
-目前专注单机实时监控，历史保留 1 小时；多服务器汇总、长期时序存储和外部告警推送尚未实现。
+目前专注单机实时监控，历史保留 1 小时；支持资源阈值告警与企业微信、Server酱、Webhook 推送。多服务器汇总和长期时序存储尚未实现。
 
 ## 页面预览
 
@@ -229,11 +229,54 @@ python3 server.py --host 0.0.0.0 --port 8080
 - **Docker**：容器搜索、状态筛选、CPU / 内存 / 网络 / 磁盘消耗、端口和详情。
 - **端口管理**：查看 TCP 监听、UDP 未连接的绑定端口和 Docker 发布映射，按协议、绑定范围、端口或服务搜索；点击查看 PID、用户、可执行文件、systemd 服务及容器归属。CPU / 内存资源详情仍保留进程占用排行。
 - **设置**：浅色 / 深色主题、刷新间隔、暂停刷新和资源提醒阈值。偏好保存在当前浏览器。
+- **后台告警**：管理员配置 CPU、内存和磁盘超限阈值、持续时间及重复通知间隔，通过企业微信群机器人、Server酱 Turbo（个人微信）或 HTTPS Webhook 接收通知；关闭网页后仍持续检测。
 - **项目入口**：点击 MoniLite 标志、页脚品牌或设置中的「GitHub 项目」，在新标签页查看源码、反馈问题或收藏项目。
 - **账户管理**：管理员初始化、登录、注册审核、用户权限及密码管理。
 - **报告**：导出包含当前指标、Docker 和历史趋势的 JSON 文件。
 
 系统每 2 秒采集一次，历史趋势在内存中保留 1 小时；重启服务后重新积累。Docker 独立每 10 秒采集，端口独立每 5 秒采集，故障不影响系统指标。界面支持最近 5 分钟、15 分钟、1 小时趋势，并可悬停查看具体采样。
+
+## 告警通知与微信接入
+
+以管理员登录，打开左侧导航栏的 **告警通知**：
+
+1. 选择接收渠道并填写凭据。
+2. 为 CPU、内存、磁盘设置阈值和单项开关，调整持续时间与重复通知间隔。
+3. 点击「保存配置」，再点击「发送测试通知」验证接收。
+4. 勾选「开启告警推送」并保存。测试通知在推送关闭时也能发送。
+
+| 渠道 | 如何配置 | 接收位置 |
+| --- | --- | --- |
+| 企业微信群机器人 | 在支持群机器人的企业微信群中添加机器人，复制 `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…` 地址 | 对应企业微信群 |
+| Server酱 Turbo | 在 [Server酱](https://sct.ftqq.com/) 获取 `SCT` 开头的 SendKey，按服务指引绑定微信接收渠道 | 第三方服务绑定的个人微信接收渠道；额度、费用与消息形式由该服务决定 |
+| 通用 Webhook | 填写第三方接收端的 HTTPS URL，接收 POST JSON | 自建服务或支持此消息格式的第三方平台 |
+
+企业微信机器人发到企业微信群，个人微信需通过 Server酱等服务接入。当前版本支持 Server酱 Turbo 的 SCT SendKey，不支持旧版 SCK Key 或其他 SendKey 格式。
+
+默认关闭推送，默认阈值为 CPU 80%、内存 90%、磁盘 90%；**严格超过**阈值并持续 60 秒后发送。持续时间可设为 0–3600 秒，0 表示下一轮检测立即触发；重复通知间隔可设为 60–86400 秒，默认 900 秒（15 分钟）。持续超限时按间隔重复通知，失败也按同一间隔重试。恢复到阈值及以下会结束本次告警，后续超限重新计时。每个磁盘挂载点独立检测；数据超过 10 秒未更新时暂停判断并重置连续超限计时。
+
+通知包含服务器名称、指标、当前值、阈值、持续时间和采集时间。通用 Webhook 示例：
+
+```json
+{
+  "kind": "alert",
+  "metric": "cpu",
+  "mount": "",
+  "hostname": "my-server",
+  "value": 93.5,
+  "threshold": 80,
+  "duration_seconds": 60,
+  "timestamp": 1791792000,
+  "title": "MoniLite · CPU 使用率超限",
+  "message": "MoniLite 资源告警\n服务器：my-server\n指标：CPU 使用率\n当前值：93.5%\n阈值：80%\n持续时间：60 秒"
+}
+```
+
+配置与最近 100 条发送记录保存在现有账号数据卷，重启及更新后保留；连续超限计时与重复间隔状态在重启后重新积累。渠道凭据保存在服务器数据库中，不返回给浏览器；同一渠道留空保留原凭据，填写新值替换。切换渠道需要填写新凭据，删除凭据需同时关闭推送。凭据不写入浏览器偏好或发送结果。
+
+规则判断与消息发送在独立后台线程中执行，第三方接口故障不阻塞监控采集。HTTPS 请求超时设为 5 秒，不跟随重定向；发送结果可在页面手动刷新查看。「发送成功」表示接收接口接受消息，最终微信送达情况以第三方渠道为准。测试通知每个管理员每分钟最多 3 次。
+
+「偏好设置 → 资源提醒」只控制当前浏览器的页面提示；后台告警阈值在导航栏「告警通知」中单独配置。告警依赖 MoniLite 服务持续运行和服务器能够访问通知渠道；本版本不发送恢复通知。
 
 切换标签页、锁屏或浏览器休眠后，返回页面会自动获取最新数据并恢复定时刷新；网络中断后也会自动重试。超时请求不会阻塞后续刷新，过期响应不会覆盖新数据。手动暂停自动刷新时保持暂停。
 
@@ -273,6 +316,8 @@ journalctl -u monilite -f
 
 `POST /api/auth/logout`、`POST /api/auth/password`、`GET /api/admin/users`、`POST /api/admin/users`、`PATCH /api/admin/users/{id}`、`DELETE /api/admin/users/{id}`、`PATCH /api/admin/settings` 提供账户及管理功能。除公开的初始化、登录与注册接口外，修改请求需要登录 Cookie 和 `X-CSRF-Token`。
 
+`GET /api/admin/alerts` 返回脱敏告警配置、当前超限项和最近发送结果。`PATCH /api/admin/alerts` 支持更新 `enabled`、`channel`（`wecom` / `serverchan` / `webhook`）、`credential`、`clear_credential`、`duration_seconds`、`repeat_seconds` 和 `rules`；每项规则包含 `enabled` 与 `threshold`，指标为 `cpu`、`memory`、`disk`。`POST /api/admin/alerts/test` 接收空 JSON 对象并向已保存渠道发送测试通知。以上接口仅对管理员开放，修改与测试请求需要 CSRF。
+
 `POST /api/storage/scan` 接收 JSON `path`（绝对目录路径）和可选的 `force`（布尔值），异步创建或复用目录分析任务；`GET /api/storage/scan?id=任务ID` 获取进度及结果。两者均要求管理员权限，创建任务同时验证 CSRF；任务按登录用户隔离。
 
 `GET /api/health` 返回采集健康状态，数据超过 10 秒未更新时返回 HTTP 503。
@@ -287,6 +332,7 @@ python3 -m unittest discover -s tests -v
 python3 -m pip install playwright
 python3 -m playwright install chromium
 python3 tests/browser_smoke.py
+python3 tests/browser_alerts.py
 python3 tests/browser_refresh.py
 ```
 
@@ -299,8 +345,11 @@ Docker 部署检查（需要本机 Docker、Compose 和 psutil）：
 ```bash
 docker compose build
 python3 tests/docker_smoke.py
+python3 tests/docker_alerts.py
 ```
 
 该检查使用独立的 Compose 项目、临时端口及账号数据卷，验证宿主机指标、监听端口与进程归属、Docker 发现、磁盘目录分析、只读挂载及容器重建后的登录保留，结束后仅清理测试容器和测试数据卷。
+
+`docker_alerts.py` 使用临时容器和数据库，验证后台告警触发、凭据脱敏、发送失败记录及重启持久化；只向测试容器自己的 `127.0.0.1:9` 尝试连接，不发送实际第三方通知。可通过 `MONILITE_TEST_IMAGE` 指定待验证镜像，默认 `monilite:local`。
 
 后端使用 Python 标准库 HTTP 服务与 psutil；前端为原生 HTML、CSS、JavaScript 和 SVG 图表，无需 Node.js 或前端构建。

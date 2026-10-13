@@ -14,6 +14,7 @@ const pages = {
   resources: {title:'资源监控', breadcrumb:'资源监控', description:'从每个核心到每次读写，细看服务器的脉搏。', icon:'chart'},
   docker: {title:'Docker 容器', breadcrumb:'Docker 容器', description:'容器运行状态与资源消耗，一处尽览。', icon:'box'},
   ports: {title:'端口管理', breadcrumb:'端口管理', description:'看清监听端口与运行服务，让每一个入口都有迹可循。', icon:'network'},
+  alerts: {title:'告警通知', breadcrumb:'告警通知', description:'设定资源阈值，把服务器异常及时送到你的通知渠道。', icon:'bell', adminOnly:true},
   settings: {title:'偏好设置', breadcrumb:'设置', description:'调整监控节奏，打造习惯的工作空间。', icon:'settings'},
 };
 const state = {page:'overview', data:null, seconds:300, dockerFilter:'all', dockerSearch:'', portSearch:'', portFilter:'all', portScope:'any', portDirection:1, timer:null, fetching:false, failed:false, user:null, csrf:null, authGeneration:0, settingsTab:'preferences', resourceTab:'cpu', storagePath:'/' };
@@ -169,19 +170,26 @@ function dockerPage() {
   return `<div class="metrics-grid" id="docker-metrics"></div><section class="panel"><div class="panel-heading"><div class="panel-title">${icon('box')}<h2>容器列表</h2></div><button class="button button-text" data-refresh>${icon('refresh')}刷新数据</button></div><div class="filter-tabs" aria-label="容器状态筛选">${[['all','全部'],['running','运行中'],['stopped','已停止']].map(([key,label])=>`<button data-filter="${key}" class="${state.dockerFilter===key?'active':''}">${label}<small data-count="${key}">0</small></button>`).join('')}</div><div class="toolbar"><label class="filter-search">${icon('search')}<input id="docker-search" placeholder="搜索容器名称、ID 或镜像" value="${esc(state.dockerSearch)}" aria-label="搜索容器"></label><span class="toolbar-note" id="docker-updated"></span></div><div class="table-scroll"><table><thead><tr><th>容器名称 / 镜像</th><th>状态</th><th>CPU</th><th>内存使用</th><th>网络 I/O</th><th>进程数</th><th></th></tr></thead><tbody id="docker-table-body"></tbody></table></div><div class="table-footer"><span id="docker-results-count"></span><span>点击容器查看详情</span></div></section>`;
 }
 function settingsPage() {
-  const preferencesPanel = `<section class="panel settings-panel"><div class="settings-section"><h3>显示偏好</h3><p>偏好设置保存在当前浏览器，下次访问自动恢复。</p><div class="setting-row"><div class="setting-label"><strong>界面主题</strong><span>选择适合工作环境的明暗风格</span></div><div class="theme-options"><button data-theme="light" class="${preferences.theme==='light'?'active':''}">${icon('sun')}浅色</button><button data-theme="dark" class="${preferences.theme==='dark'?'active':''}">${icon('moon')}深色</button></div></div></div><div class="settings-section"><h3>实时监控</h3><p>后台每 2 秒持续采集，趋势数据保留最近 1 小时；Docker 每 10 秒、端口每 5 秒独立采集。</p><div class="setting-row"><div class="setting-label"><strong>自动刷新</strong><span>自动获取最新指标，关闭后可手动刷新</span></div><button class="toggle" id="auto-refresh-toggle" role="switch" aria-label="自动刷新" aria-checked="${preferences.autoRefresh}"></button></div><div class="setting-row"><div class="setting-label"><strong>界面刷新频率</strong><span>调整浏览器获取数据的间隔</span></div><select class="setting-select" id="refresh-interval" aria-label="刷新频率">${[2,5,10].map(v=>`<option value="${v}" ${preferences.interval===v?'selected':''}>每 ${v} 秒</option>`).join('')}</select></div><div class="setting-row"><div class="setting-label"><strong>立即刷新</strong><span>获取一份当前资源快照</span></div><button class="button" data-refresh>${icon('refresh')}刷新数据</button></div></div><div class="settings-section"><h3>资源提醒</h3><p>指标达到阈值后，顶部通知和服务器状态将自动提示。</p>${[['cpuThreshold','CPU 使用率'],['memoryThreshold','内存使用率'],['diskThreshold','磁盘使用率']].map(([key,label])=>`<div class="setting-row"><div class="setting-label"><strong>${label}</strong><span>达到此百分比时提示资源负载较高</span></div><label><input class="threshold-input" type="number" min="1" max="100" step="1" value="${preferences[key]}" data-threshold="${key}" aria-label="${label}提醒阈值"> <span style="color:var(--muted);font-size:11px">%</span></label></div>`).join('')}</div><div class="settings-section"><div class="about-monilite"><span class="brand-mark">M</span><div><h3>MoniLite.</h3><p>轻量的本机资源监控 · 全部数据来自真实采集<br>Python + psutil · 原生 Web 界面<br><a class="button button-text" href="https://github.com/luxunhe-wq/MoniLite" target="_blank" rel="noopener noreferrer" aria-label="查看 MoniLite GitHub 项目（新标签页）">GitHub 项目 ${icon('external')}</a></p></div><span class="about-version">v1.4.0</span></div></div></section>`;
+  const preferencesPanel = `<section class="panel settings-panel"><div class="settings-section"><h3>显示偏好</h3><p>偏好设置保存在当前浏览器，下次访问自动恢复。</p><div class="setting-row"><div class="setting-label"><strong>界面主题</strong><span>选择适合工作环境的明暗风格</span></div><div class="theme-options"><button data-theme="light" class="${preferences.theme==='light'?'active':''}">${icon('sun')}浅色</button><button data-theme="dark" class="${preferences.theme==='dark'?'active':''}">${icon('moon')}深色</button></div></div></div><div class="settings-section"><h3>实时监控</h3><p>后台每 2 秒持续采集，趋势数据保留最近 1 小时；Docker 每 10 秒、端口每 5 秒独立采集。</p><div class="setting-row"><div class="setting-label"><strong>自动刷新</strong><span>自动获取最新指标，关闭后可手动刷新</span></div><button class="toggle" id="auto-refresh-toggle" role="switch" aria-label="自动刷新" aria-checked="${preferences.autoRefresh}"></button></div><div class="setting-row"><div class="setting-label"><strong>界面刷新频率</strong><span>调整浏览器获取数据的间隔</span></div><select class="setting-select" id="refresh-interval" aria-label="刷新频率">${[2,5,10].map(v=>`<option value="${v}" ${preferences.interval===v?'selected':''}>每 ${v} 秒</option>`).join('')}</select></div><div class="setting-row"><div class="setting-label"><strong>立即刷新</strong><span>获取一份当前资源快照</span></div><button class="button" data-refresh>${icon('refresh')}刷新数据</button></div></div><div class="settings-section"><h3>资源提醒</h3><p>指标达到阈值后，顶部通知和服务器状态将自动提示。此处仅控制当前网页提示；第三方推送请在「告警通知」中配置。</p>${[['cpuThreshold','CPU 使用率'],['memoryThreshold','内存使用率'],['diskThreshold','磁盘使用率']].map(([key,label])=>`<div class="setting-row"><div class="setting-label"><strong>${label}</strong><span>达到此百分比时提示资源负载较高</span></div><label><input class="threshold-input" type="number" min="1" max="100" step="1" value="${preferences[key]}" data-threshold="${key}" aria-label="${label}提醒阈值"> <span style="color:var(--muted);font-size:11px">%</span></label></div>`).join('')}</div><div class="settings-section"><div class="about-monilite"><span class="brand-mark">M</span><div><h3>MoniLite.</h3><p>轻量的本机资源监控 · 全部数据来自真实采集<br>Python + psutil · 原生 Web 界面<br><a class="button button-text" href="https://github.com/luxunhe-wq/MoniLite" target="_blank" rel="noopener noreferrer" aria-label="查看 MoniLite GitHub 项目（新标签页）">GitHub 项目 ${icon('external')}</a></p></div><span class="about-version">v1.4.0</span></div></div></section>`;
   return accountSettingsLayout(preferencesPanel);
 }
 function renderPage() {
+  if(pages[state.page].adminOnly && state.user && state.user.role!=='admin') {
+    state.page='overview';
+    history.replaceState(null,'',`${location.pathname}${location.search}#overview`);
+  }
   const metadata = pages[state.page];
   $('#page-title').innerHTML = `${metadata.title}<span class="heading-dot">.</span>`;
   $('#page-description').textContent = metadata.description;
   $('#breadcrumb-page').textContent = metadata.breadcrumb;
   document.title = `${metadata.breadcrumb} · MoniLite`;
   $$('[data-page]').forEach(a=>a.classList.toggle('active',a.dataset.page===state.page));
-  if(!state.data) return;
+  if(!state.data && !(state.page==='alerts' && state.user?.role==='admin')) {
+    $('#page-content').hidden=true;$('#loading').hidden=false;
+    return;
+  }
   $('#loading').hidden = true; $('#page-content').hidden = false;
-  $('#page-content').innerHTML = ({overview:overviewPage,resources:resourcesPage,docker:dockerPage,ports:portsPage,settings:settingsPage})[state.page]();
+  $('#page-content').innerHTML = ({overview:overviewPage,resources:resourcesPage,docker:dockerPage,ports:portsPage,settings:settingsPage,alerts:alertSettingsPanel})[state.page]();
   bindPage(); updatePage();
 }
 function updatePage() {
@@ -258,6 +266,7 @@ function bindPage() {
   if($('#refresh-interval')) $('#refresh-interval').onchange=event=>{preferences.interval=Number(event.target.value);savePreferences();scheduleRefresh();updateStatus();toast('刷新频率已更新');};
   $$('[data-threshold]').forEach(input=>input.onchange=()=>{const value=Math.min(100,Math.max(1,Math.round(Number(input.value)||defaults[input.dataset.threshold])));input.value=value;preferences[input.dataset.threshold]=value;savePreferences();updateStatus();toast('提醒阈值已保存');});
   if(state.page==='settings') bindAccountSettings();
+  if(state.page==='alerts') bindAlertSettings();
   if(state.page==='resources') bindResourceDetails();
 }
 function openContainer(id) {
@@ -296,7 +305,7 @@ async function fetchData() {
     rendering=true;
     const first=!state.data;state.data=data;state.failed=false;
     $('#connection-error').hidden=true;
-    if(first)renderPage();else updatePage();
+    if(first && !(state.page==='alerts' && $('#alert-form')))renderPage();else updatePage();
     return true;
   } catch(error) {
     if(!isCurrent() || !state.user)return false;
@@ -336,6 +345,7 @@ function navigate() {
     state.storagePath=new URLSearchParams(query).get('path')||'/';
   }
   stopStoragePolling();
+  if(state.page!=='alerts')resetAlertSettings();
   renderPage();closeSidebar();
   $('#notification-popover').hidden=true;$('#notification-button').setAttribute('aria-expanded','false');
   window.scrollTo({top:savedScroll,behavior:'instant'});
@@ -344,7 +354,7 @@ function closeSidebar() {document.body.classList.remove('sidebar-open');$('#side
 
 function searchResults() {
   const query=$('#global-search').value.trim().toLowerCase(), results=[];
-  for(const [key,page] of Object.entries(pages))if(!query||`${page.title} ${key}`.toLowerCase().includes(query))results.push({type:'page',id:key,label:page.title,description:'页面',icon:page.icon});
+  for(const [key,page] of Object.entries(pages))if((!page.adminOnly || state.user?.role==='admin') && (!query||`${page.title} ${key}`.toLowerCase().includes(query)))results.push({type:'page',id:key,label:page.title,description:'页面',icon:page.icon});
   if(state.data && query){
     state.data.docker.containers.filter(c=>`${c.name} ${c.id} ${c.image}`.toLowerCase().includes(query)).slice(0,8).forEach(c=>results.push({type:'container',id:c.id,label:c.name,description:'Docker 容器',icon:'box'}));
     portData().items.filter(row=>portSearchText(row).includes(query)).slice(0,8).forEach(row=>results.push({type:'port',id:row.id,label:`${row.protocol.toUpperCase()} · ${portEndpoint(row)}`,description:portService(row),icon:'network'}));

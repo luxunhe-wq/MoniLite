@@ -15,6 +15,7 @@ import threading
 import time
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from alerts import AlertError, AlertService
 from http.cookies import SimpleCookie, CookieError
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -256,8 +257,9 @@ class Monitor:
         return result
 
 
-def make_handler(monitor, auth, storage=None):
+def make_handler(monitor, auth, storage=None, alerts=None):
     storage = storage or StorageAnalyzer(host=monitor.host)
+    alerts = alerts or AlertService(auth)
     class Handler(BaseHTTPRequestHandler):
         def session(self):
             cookie = SimpleCookie()
@@ -275,10 +277,10 @@ def make_handler(monitor, auth, storage=None):
                 raise AuthError("请先登录", 401)
             return session
 
-        def require_admin_session(self):
+        def require_admin_session(self, message="目录占用分析仅对管理员开放"):
             session = self.require_session()
             if session["user"]["role"] != "admin":
-                raise AuthError("目录占用分析仅对管理员开放", 403)
+                raise AuthError(message, 403)
             return session
 
         def cookie(self, token=None):
@@ -317,6 +319,13 @@ def make_handler(monitor, auth, storage=None):
 
         def do_GET(self):
             parsed = urlsplit(self.path)
+            if parsed.path == "/api/admin/alerts":
+                try:
+                    self.require_admin_session("告警通知仅对管理员开放")
+                    self.send_json(alerts.status())
+                except (AuthError, AlertError) as exc:
+                    self.send_json({"error": str(exc)}, exc.status)
+                return
             if parsed.path == "/api/auth/status":
                 self.send_json(auth.status(self.session()))
                 return
@@ -408,7 +417,21 @@ def make_handler(monitor, auth, storage=None):
                         self.send_json(result, 201 if path.endswith("setup") else 200, self.cookie(token))
                     return
                 actor = session["user"]["id"]
-                if method == "POST" and path == "/api/storage/scan":
+                if (method == "PATCH" and path == "/api/admin/alerts") or (method == "POST" and path == "/api/admin/alerts/test"):
+                    if session["user"]["role"] != "admin":
+                        raise AuthError("告警通知仅对管理员开放", 403)
+                    if method == "PATCH":
+                        self.send_json(alerts.update(data))
+                    else:
+                        try:
+                            auth.limiter.check((actor, "alert-test"), limit=3, window=60)
+                        except AuthError as exc:
+                            if exc.status == 429:
+                                raise AuthError("测试通知过于频繁，请 1 分钟后再试", 429) from None
+                            raise
+                        result = alerts.test_notification(monitor.system["hostname"])
+                        self.send_json(result, 200 if result["success"] else 502)
+                elif method == "POST" and path == "/api/storage/scan":
                     if session["user"]["role"] != "admin":
                         raise AuthError("目录占用分析仅对管理员开放", 403)
                     self.send_json(storage.start(actor, data.get("path", "/"), data.get("force", False)), 202)
@@ -435,7 +458,7 @@ def make_handler(monitor, auth, storage=None):
                         self.send_json({"message": "用户已删除"})
                 else:
                     raise AuthError("接口不存在", 404)
-            except (AuthError, StorageError) as exc:
+            except (AuthError, StorageError, AlertError) as exc:
                 self.send_json({"error": str(exc)}, exc.status)
             except TimeoutError:
                 self.send_json({"error": "请求超时"}, 408)
@@ -498,8 +521,10 @@ def main():
     host = configure_host()
     monitor = Monitor(host)
     auth = AuthStore(os.environ.get("MONILITE_DATA_DIR", os.environ.get("KONG_DATA_DIR", str(ROOT / "data"))))
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(monitor, auth))
+    alerts = AlertService(auth)
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(monitor, auth, alerts=alerts))
     monitor.start()
+    alerts.start(monitor)
     print(f"MoniLite is listening on http://{args.host}:{args.port}", flush=True)
     try:
         server.serve_forever()
@@ -507,6 +532,7 @@ def main():
         pass
     finally:
         monitor.stop_event.set()
+        alerts.stop()
         server.server_close()
 
 

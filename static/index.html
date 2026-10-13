@@ -8,13 +8,14 @@
   <title>MoniLite · 服务器监控</title>
   <link rel="icon" href="/favicon.svg?v=1.4.0" type="image/svg+xml">
   <link rel="stylesheet" href="/style.css?v=1.4.0">
-  <link rel="stylesheet" href="/auth.css?v=1.4.0">
+  <link rel="stylesheet" href="/auth.css?v=1.5.0">
   <link rel="stylesheet" href="/resources.css?v=1.3.0">
   <link rel="stylesheet" href="/ports.css?v=1.3.0">
-  <script src="/app.js?v=1.4.2" defer></script>
+  <script src="/app.js?v=1.5.1" defer></script>
   <script src="/resources.js?v=1.4.0" defer></script>
   <script src="/ports.js?v=1.3.0" defer></script>
-  <script src="/auth.js?v=1.4.0" defer></script>
+  <script src="/alerts.js?v=1.5.1" defer></script>
+  <script src="/auth.js?v=1.5.1" defer></script>
 </head>
 <body>
   <svg class="icon-library" aria-hidden="true"><defs>
@@ -58,6 +59,7 @@
       <a href="#resources" data-page="resources" class="nav-item"><svg class="icon"><use href="#i-chart"/></svg><span>资源监控</span></a>
       <a href="#docker" data-page="docker" class="nav-item"><svg class="icon"><use href="#i-box"/></svg><span>Docker 容器</span><span class="nav-count" id="nav-docker-count">—</span></a>
       <a href="#ports" data-page="ports" class="nav-item"><svg class="icon"><use href="#i-network"/></svg><span>端口管理</span></a>
+      <a href="#alerts" data-page="alerts" data-admin-nav class="nav-item" hidden><svg class="icon"><use href="#i-bell"/></svg><span>告警通知</span></a>
     </nav>
     <div class="nav-label nav-label-system">偏好设置</div>
     <a href="#settings" data-page="settings" class="nav-item"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span></a>

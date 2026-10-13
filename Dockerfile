@@ -12,7 +12,7 @@ WORKDIR /app
 COPY --from=docker_cli /usr/local/bin/docker /usr/local/bin/docker
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-COPY server.py auth.py storage.py ports.py host.py ./
+COPY server.py auth.py storage.py ports.py host.py alerts.py ./
 COPY static ./static
 COPY deploy/healthcheck.py ./healthcheck.py
 
